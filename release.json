@@ -1,0 +1,80 @@
+{
+  "assets": {
+    "praat_module": {
+      "bytes": 305939,
+      "chunks": [
+        {
+          "bytes": 305939,
+          "path": "assets/praat_module-000.mjs",
+          "sha256": "c4f896e909f4ad1733ed2dcc6320096e19ccc5647e951a70a54f19db0313d1a2"
+        }
+      ],
+      "sha256": "c4f896e909f4ad1733ed2dcc6320096e19ccc5647e951a70a54f19db0313d1a2"
+    },
+    "praat_wasm": {
+      "bytes": 40743390,
+      "chunks": [
+        {
+          "bytes": 20971520,
+          "path": "assets/praat_wasm-000.bin",
+          "sha256": "9ddeca012c519ba0b041dac6a882a344d0d6a0a5686d19dccc9acc005ff54945"
+        },
+        {
+          "bytes": 19771870,
+          "path": "assets/praat_wasm-001.bin",
+          "sha256": "4b630a3c4ee08c846dcd557ed747c689ccfde4aa3e5103c7954fef7193914efc"
+        }
+      ],
+      "sha256": "4fad3e73c2cb8daecaddc72920b5c29fa9a62c6d8ac367d0be19794dccc7eb9d"
+    },
+    "world_module": {
+      "bytes": 14869,
+      "chunks": [
+        {
+          "bytes": 14869,
+          "path": "assets/world_module-000.mjs",
+          "sha256": "8b27b73fefe8be20b36cf5288d06d1cd938813b7d9c1a179227fe1cac3d5cdcb"
+        }
+      ],
+      "sha256": "8b27b73fefe8be20b36cf5288d06d1cd938813b7d9c1a179227fe1cac3d5cdcb"
+    },
+    "world_wasm": {
+      "bytes": 108983,
+      "chunks": [
+        {
+          "bytes": 108983,
+          "path": "assets/world_wasm-000.bin",
+          "sha256": "fabb1b8f6225f23221bb75f0b69fcbe6f6e033ef0c1aedf0d124393001715a46"
+        }
+      ],
+      "sha256": "fabb1b8f6225f23221bb75f0b69fcbe6f6e033ef0c1aedf0d124393001715a46"
+    }
+  },
+  "example": {
+    "bytes": 2927806,
+    "license": "CC-BY-4.0",
+    "path": "example.wav",
+    "sha256": "97504361908ce2f8b27a65ce408f13757b6ac6ba07ae53f527b5d91a9eee3ae4",
+    "source": "https://doi.org/10.5281/zenodo.1203819"
+  },
+  "license": "GPL-3.0-or-later",
+  "notices": "licenses/notices.txt",
+  "release": "f4cd8082af496d6b08ca94af587537f2400c2d7bbbb037ee6ba96cf1c62d2aab",
+  "schema": "voice-static-release-v1",
+  "source": {
+    "bytes": 29872251,
+    "chunks": [
+      {
+        "bytes": 20971520,
+        "path": "assets/source-000.bin",
+        "sha256": "02266461b325994bb6a724436cb05b44a65b2653a14b384152f121e12e160967"
+      },
+      {
+        "bytes": 8900731,
+        "path": "assets/source-001.bin",
+        "sha256": "eb3338d1953dbcb427defa8ffc3c1a32d0e9169da0d33090a37e64a611333317"
+      }
+    ],
+    "sha256": "791effef10251b2dab9369d4362e5371b18a3b4db0677e87a60b3ee5146c272a"
+  }
+}
