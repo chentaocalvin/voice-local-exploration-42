@@ -2,6 +2,37 @@
 const FS = 44100, FFT = 2048, BINS = 1025;
 const finite = (x) => Number.isFinite(x);
 
+export function tiltFrameWeights({ frames, time, f0 }, source, control) {
+  const { start_frame: first, end_frame: last, mode } = control;
+  const intervals = source.eligible_intervals.T;
+  let begin = first * .005, end = last * .005;
+  if (mode === 'front') end = (begin + end) / 2;
+  if (mode === 'back') begin = (begin + end) / 2;
+  const selected = [];
+  for (let i = first; i < last; i++) {
+    if (time[i] >= begin && time[i] < end && f0[i] >= FS / FFT + 1 && intervals.some(([a, b]) => a <= i && i < b)) selected.push(i);
+  }
+  const weights = new Float64Array(frames);
+  const fade = (d) => .5 - .5 * Math.cos(Math.PI * Math.max(0, Math.min(1, d / .05)));
+  let run = 0;
+  while (run < selected.length) {
+    let stop = run + 1;
+    while (stop < selected.length && selected[stop] === selected[stop - 1] + 1) stop++;
+    const lo = time[selected[run]], hi = time[selected[stop - 1]];
+    for (let k = run; k < stop; k++) {
+      const i = selected[k], t = time[i];
+      let weight = fade(t - begin) * fade(end - t) * fade(t - lo) * fade(hi - t);
+      if (mode !== 'flat') {
+        const phase = (t - first * .005) / ((last - first) * .005) - (mode === 'back' ? .5 : 0);
+        weight *= Math.sin(Math.PI * phase) ** 2;
+      }
+      weights[i] = weight;
+    }
+    run = stop;
+  }
+  return weights;
+}
+
 export function prepareT(parent, source, control) {
   const { frames, time, f0, sp, ap } = parent;
   if (!Number.isInteger(frames) || frames <= 0 || frames > 9001 ||
@@ -26,45 +57,26 @@ export function prepareT(parent, source, control) {
     if (!finite(sp[i]) || sp[i] < 0 || !finite(ap[i]) || ap[i] < 0 || ap[i] > 1) throw new Error('invalid_parent');
   }
   if (amount === 0) return { sp: sp.slice(), active: new Uint8Array(frames) };
-  let begin = first * .005, end = last * .005;
-  if (mode === 'front') end = (begin + end) / 2;
-  if (mode === 'back') begin = (begin + end) / 2;
-  const selected = [];
-  for (let i = first; i < last; i++) {
-    if (time[i] >= begin && time[i] < end && f0[i] >= FS / FFT + 1 && intervals.some(([a, b]) => a <= i && i < b)) selected.push(i);
-  }
+  const weights = tiltFrameWeights(parent, source, control);
   const result = sp.slice();
   const active = new Uint8Array(frames);
-  const fade = (d) => .5 - .5 * Math.cos(Math.PI * Math.max(0, Math.min(1, d / .05)));
-  let run = 0;
-  while (run < selected.length) {
-    let stop = run + 1;
-    while (stop < selected.length && selected[stop] === selected[stop - 1] + 1) stop++;
-    const lo = time[selected[run]], hi = time[selected[stop - 1]];
-    for (let k = run; k < stop; k++) {
-      const i = selected[k], t = time[i];
-      let weight = fade(t - begin) * fade(end - t) * fade(t - lo) * fade(hi - t);
-      if (mode !== 'flat') {
-        const phase = (t - first * .005) / ((last - first) * .005) - (mode === 'back' ? .5 : 0);
-        weight *= Math.sin(Math.PI * phase) ** 2;
-      }
-      if (!(weight > 0)) continue;
-      active[i] = 1;
-      let before = 0, after = 0;
-      for (let j = 1; j < BINS; j++) {
-        const idx = i * BINS + j;
-        const curve = Math.max(-1, Math.min(1, Math.log2((j * FS / FFT) / 1000)));
-        before += sp[idx];
-        result[idx] = sp[idx] * 10 ** (amount * weight * curve / 10);
-        after += result[idx];
-      }
-      if (!finite(before) || !finite(after) || before <= 0 || after <= 0) throw new Error('invalid_spectrum');
-      for (let j = 1; j < BINS; j++) result[i * BINS + j] *= before / after;
-      let restored = 0;
-      for (let j = 1; j < BINS; j++) restored += result[i * BINS + j];
-      if (!finite(restored) || Math.abs(restored - before) > 1e-12 * before) throw new Error('power_not_preserved');
+  for (let i = 0; i < frames; i++) {
+    const weight = weights[i];
+    if (!(weight > 0)) continue;
+    active[i] = 1;
+    let before = 0, after = 0;
+    for (let j = 1; j < BINS; j++) {
+      const idx = i * BINS + j;
+      const curve = Math.max(-1, Math.min(1, Math.log2((j * FS / FFT) / 1000)));
+      before += sp[idx];
+      result[idx] = sp[idx] * 10 ** (amount * weight * curve / 10);
+      after += result[idx];
     }
-    run = stop;
+    if (!finite(before) || !finite(after) || before <= 0 || after <= 0) throw new Error('invalid_spectrum');
+    for (let j = 1; j < BINS; j++) result[i * BINS + j] *= before / after;
+    let restored = 0;
+    for (let j = 1; j < BINS; j++) restored += result[i * BINS + j];
+    if (!finite(restored) || Math.abs(restored - before) > 1e-12 * before) throw new Error('power_not_preserved');
   }
   if (!active.some(Boolean)) throw new Error('insufficient_support');
   return { sp: result, active };

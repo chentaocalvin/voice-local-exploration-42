@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { inspectPcm16, decodePcm16, encodePcm32 } from './pcm.mjs';
-import { prepareT } from './t_control.mjs';
+import { prepareT, tiltFrameWeights } from './t_control.mjs';
+import { renderWaveformTilt } from './waveform_tilt.mjs';
 import { qualifySource } from './qualification.mjs';
 import { sha256 } from './identity.mjs';
 
-export const METHOD = 'voice-local-world-praat-T-v1';
+export const LEGACY_METHOD = 'voice-local-world-praat-T-v1';
+export const METHOD = 'voice-local-praat-waveform-T-v2';
 const MAX_PARENT = 256 * 1024 * 1024;
 const copyControl = (c) => ({ start_frame: c.start_frame, end_frame: c.end_frame, amount: c.amount, mode: c.mode });
 const controlTag = (c) => [c.start_frame, c.end_frame, c.amount, c.mode];
@@ -90,19 +92,31 @@ export function createEngine({ sdk, reserve = async () => {}, verifyLocal = asyn
     const event = { kind, slot, input_sha256: inputHash, samples, utc: new Date().toISOString() };
     await reserve(event); events.push(event);
   };
-  const qualify = (analysis, track, inputHash, samples) => {
-    const source = qualifySource({ ...analysis, samples, track, inputSha256: inputHash, methodVersion: method });
-    const [a, b] = source.default_region;
-    if (!source.eligible_intervals.T.some(([lo, hi]) => lo <= a && b <= hi)) throw new Error('condition_insufficient_T_region');
-    return source;
-  };
+  const compatible = (storedMethod) => storedMethod === method ||
+    (method === METHOD && storedMethod === LEGACY_METHOD);
+  const qualify = (analysis, track, inputHash, samples, activeMethod) =>
+    qualifySource({ ...analysis, samples, track, inputSha256: inputHash, methodVersion: activeMethod }, (source) => {
+      const [first, last] = source.default_region;
+      const inset = first + Math.ceil((last - first) / 4);
+      const edits = [[first, 6, 'flat'], [first, -6, 'front'], [inset, 3, 'back'],
+        [inset, 3, 'flat'], [inset, -3, 'flat']];
+      return edits.every(([start, amount, mode]) => {
+        try {
+          const result = prepareT(analysis, source, { start_frame: start, end_frame: last, amount, mode });
+          return result.sp.some((value, index) => value !== analysis.sp[index]);
+        } catch (error) {
+          if (error.message === 'insufficient_support') return false;
+          throw error;
+        }
+      });
+    }, activeMethod === LEGACY_METHOD);
   const expose = (version) => ({ id: version.id, sha256: version.sha256,
     control: version.control ? copyControl(version.control) : null, bytes: version.bytes.slice() });
   const info = () => ({ input_sha256: parent.inputSha256, samples: parent.samples, sample_rate: 44100,
-    source: publicSource(parent.source), original: { id: 'O', bytes: parent.input.slice() }, baseline: expose(baseline), method_version: method });
+    source: publicSource(parent.source), original: { id: 'O', bytes: parent.input.slice() }, baseline: expose(baseline), method_version: parent.method });
 
   // Build a complete candidate before replacing any live input or heard version.
-  async function analyzeCandidate(input) {
+  async function analyzeCandidate(input, activeMethod = method) {
       if (!(input instanceof Uint8Array) || Object.prototype.toString.call(input.buffer) !== '[object ArrayBuffer]') throw new Error('invalid_wav');
       const bytes = input.slice(), format = inspectPcm16(bytes);
       await charge('audio_read', 'input-identity', format.samples, null);
@@ -116,13 +130,17 @@ export function createEngine({ sdk, reserve = async () => {}, verifyLocal = asyn
       await charge('audio_read', 'world-input', 3 * samples.length, inputSha256);
       const analysis = await sdk.analyze(samples);
       validateAnalysis(analysis, samples.length);
-      const source = qualify(analysis, track, inputSha256, samples.length);
-      await charge('synthesize', 'U', 0, inputSha256);
-      const raw = await sdk.synthesize(analysis);
-      await charge('audio_read', 'U-output-QA', 3 * rawLength(analysis.frames), inputSha256);
-      const wave = encodePcm32(raw, samples.length, rawLength(analysis.frames));
+      const source = qualify(analysis, track, inputSha256, samples.length, activeMethod);
+      let raw = samples;
+      if (activeMethod !== METHOD) {
+        await charge('synthesize', 'U', 0, inputSha256);
+        raw = await sdk.synthesize(analysis);
+      }
+      const length = activeMethod === METHOD ? samples.length : rawLength(analysis.frames);
+      await charge('audio_read', 'U-output-QA', 3 * length, inputSha256);
+      const wave = encodePcm32(raw, samples.length, length);
       const waveSha = await sha256(wave);
-    const nextParent = { input: bytes, inputSha256, samples: samples.length, analysis, track, source };
+    const nextParent = { input: bytes, inputSha256, samples: samples.length, analysis, track, source, method: activeMethod };
     const nextBaseline = { id: 'U', bytes: wave, sha256: waveSha,
       control: { start_frame: source.default_region[0], end_frame: source.default_region[1], amount: 0, mode: 'flat' } };
     return { parent: nextParent, baseline: nextBaseline };
@@ -132,13 +150,26 @@ export function createEngine({ sdk, reserve = async () => {}, verifyLocal = asyn
     versions.clear(); snapshots.clear(); versions.set('U', baseline);
   }
   async function renderCandidate(candidate, control, slot) {
-    const selected = copyControl(control), changed = prepareT(candidate.analysis, candidate.source, selected);
-    await charge('synthesize', slot ?? 'edit', 0, candidate.inputSha256);
-    const raw = await sdk.synthesize({ ...candidate.analysis, sp: changed.sp });
-    await charge('audio_read', 'edit-output-QA', 3 * rawLength(candidate.analysis.frames), candidate.inputSha256);
-    const bytes = encodePcm32(raw, candidate.samples, rawLength(candidate.analysis.frames));
+    const selected = copyControl(control);
+    const changed = prepareT(candidate.analysis, candidate.source, selected);
+    const waveform = candidate.method === METHOD;
+    let raw, length;
+    if (waveform) {
+      await charge('audio_read', 'waveform-source', candidate.samples, candidate.inputSha256);
+      const original = decodePcm16(candidate.input);
+      const weights = tiltFrameWeights(candidate.analysis, candidate.source, selected);
+      raw = renderWaveformTilt(original, weights, selected.amount);
+      length = candidate.samples;
+    } else {
+      await charge('synthesize', slot ?? 'edit', 0, candidate.inputSha256);
+      raw = await sdk.synthesize({ ...candidate.analysis, sp: changed.sp });
+      length = rawLength(candidate.analysis.frames);
+    }
+    await charge('audio_read', 'edit-output-QA', 3 * length, candidate.inputSha256);
+    const bytes = encodePcm32(raw, candidate.samples, length);
     const hash = await sha256(bytes), id = 'E:' + hash + ':' + JSON.stringify(controlTag(selected));
-    return { id, sha256: hash, bytes, control: selected, sp: changed.sp, active: changed.active, slot };
+    return { id, sha256: hash, bytes, control: selected, sp: waveform ? null : changed.sp,
+      active: waveform ? null : changed.active, slot };
   }
 
   const engine = {
@@ -160,13 +191,13 @@ export function createEngine({ sdk, reserve = async () => {}, verifyLocal = asyn
     async snapshot({ resultId = 'U', draftControl, listening }) {
       const version = versions.get(resultId);
       if (!parent || !version) throw new Error('result_missing');
-      const parentBytes = packParent(parent, baseline.bytes, method, versions);
-      const record = { engine_id: method, input_sha256: parent.inputSha256, result_sha256: version.sha256,
+      const parentBytes = packParent(parent, baseline.bytes, parent.method, versions);
+      const record = { engine_id: parent.method, input_sha256: parent.inputSha256, result_sha256: version.sha256,
         parent_sha256: await sha256(parentBytes), control: copyControl(version.control), draft_control: copyControl(draftControl), listening: structuredClone(listening) };
       snapshots.add(recordTag(record));
       return { inputBytes: parent.input.slice(), resultBytes: version.bytes.slice(), parentBytes,
         inputSha256: record.input_sha256, resultSha256: record.result_sha256, parentSha256: record.parent_sha256,
-        engineId: method, control: record.control, draftControl: record.draft_control, listening: record.listening };
+        engineId: parent.method, control: record.control, draftControl: record.draft_control, listening: record.listening };
     },
     async authorizeSnapshot(record) {
       return snapshots.has(recordTag(record)) && await sha256(record.input) === record.input_sha256 &&
@@ -174,13 +205,13 @@ export function createEngine({ sdk, reserve = async () => {}, verifyLocal = asyn
     },
     async restoreLocal(record) {
       const verified = await verifyLocal(record);
-      if (verified.engine_id !== method) throw new Error('incompatible_method');
+      if (!compatible(verified.engine_id)) throw new Error('incompatible_method');
       const format = inspectPcm16(verified.input);
-      const restored = unpackParent(verified.parent, verified.input_sha256, format.samples, method);
-      const source = qualify(restored.analysis, restored.track, verified.input_sha256, format.samples);
+      const restored = unpackParent(verified.parent, verified.input_sha256, format.samples, verified.engine_id);
+      const source = qualify(restored.analysis, restored.track, verified.input_sha256, format.samples, verified.engine_id);
       prepareT(restored.analysis, source, verified.control);
       const nextParent = { input: verified.input.slice(), inputSha256: verified.input_sha256, samples: format.samples,
-        analysis: restored.analysis, track: restored.track, source };
+        analysis: restored.analysis, track: restored.track, source, method: verified.engine_id };
       const nextBaseline = { id: 'U', bytes: restored.baseline, sha256: await sha256(restored.baseline),
         control: { start_frame: source.default_region[0], end_frame: source.default_region[1], amount: 0, mode: 'flat' } };
       const nextVersions = new Map([['U', nextBaseline]]);
@@ -199,10 +230,10 @@ export function createEngine({ sdk, reserve = async () => {}, verifyLocal = asyn
         draft: copyControl(verified.draft_control), listening: structuredClone(verified.listening) };
     },
     async restoreImported(record) {
-      if (record.engine_id !== method) throw new Error('incompatible_method');
+      if (!compatible(record.engine_id)) throw new Error('incompatible_method');
       const identity = await sha256(record.input);
       if (identity !== record.input_sha256) throw new Error('identity_mismatch');
-      const candidate = await analyzeCandidate(record.input);
+      const candidate = await analyzeCandidate(record.input, record.engine_id);
       const result = await renderCandidate(candidate.parent, record.control, 'file-reproduce');
       if (result.sha256 !== record.result_sha256) throw new Error('restored_result_mismatch');
       commit(candidate); versions.set(result.id, result);
@@ -210,6 +241,16 @@ export function createEngine({ sdk, reserve = async () => {}, verifyLocal = asyn
     },
     async evidencePiece(slot = 'parent') {
       if (!parent) throw new Error('analysis_required');
+      if (parent.method === METHOD) {
+        const version = slot === 'parent' ? baseline : [...versions.values()].find((entry) => entry.slot === slot);
+        if (!version || (slot !== 'parent' && !/^E[1-5]$/.test(slot))) throw new Error('evidence_version_missing');
+        return {
+          header: { schema: 'voice-waveform-evidence-v2', input_sha256: parent.inputSha256,
+            method_version: parent.method, samples: parent.samples, source: publicSource(parent.source),
+            slot, control: version.control, wav_sha256: version.sha256, bytes: version.bytes.length },
+          blob: new Blob([version.bytes], { type: 'audio/wav' }),
+        };
+      }
       let arrays, control = null;
       if (slot === 'parent') {
         arrays = { time: parent.analysis.time, f0: parent.analysis.f0,
@@ -230,7 +271,7 @@ export function createEngine({ sdk, reserve = async () => {}, verifyLocal = asyn
         pieces.push(bytes); offset += bytes.length;
       }
       return { header: { schema: 'voice-evidence-v1', input_sha256: parent.inputSha256, samples: parent.samples,
-        frames: parent.analysis.frames, praat_frames: parent.track.length, method_version: method,
+        frames: parent.analysis.frames, praat_frames: parent.track.length, method_version: parent.method,
         source: publicSource(parent.source), qualification: true, slot, control,
         controls: control ? { [slot]: control } : {}, arrays: descriptor, bytes: offset }, blob: new Blob(pieces) };
     },

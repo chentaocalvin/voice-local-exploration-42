@@ -13,18 +13,42 @@ function intervals(mask) {
   return r;
 }
 
-/** Original Praat 9-decimal timestamps mapped by NumPy rint's ties-even rule. */
+/** Map a regular track exactly halfway between frames to the later frame. */
+function regularHalfGrid(track) {
+  const stepNs = 5_000_000, halfNs = stepNs / 2;
+  if (track.length < 2) return null;
+  const firstNs = Math.round(track[0].time * 1e9);
+  if (!Number.isSafeInteger(firstNs) || firstNs % stepNs !== halfNs) return null;
+  for (let i = 0; i < track.length; i++) {
+    const expectedNs = firstNs + i * stepNs;
+    if (!Number.isSafeInteger(expectedNs) || track[i].time !== expectedNs / 1e9) return null;
+  }
+  return (firstNs + halfNs) / stepNs;
+}
+
 export function alignPraat(frames, track) {
   if (!Number.isSafeInteger(frames) || frames<1 || !Array.isArray(track) || !track.length) fail('invalid_track');
-  const result=new Float64Array(frames).fill(NaN), seen=new Uint8Array(frames); let previous=-1;
-  for(const row of track) {
+  let previous = -1;
+  for (const row of track) {
     if(!row || !finite(row.time) || row.time<0 || row.time<=previous || typeof row.undefined!=='boolean' ||
        !finite(row.hz) || row.hz<0 || (row.undefined && (row.hz!==0 || Object.is(row.hz,-0)))) fail('invalid_track');
-    previous=row.time; const idx=tieEven(row.time/STEP);
-    if(idx>=0 && idx<frames && Math.abs(row.time-idx*STEP)<=.0025) {
-      if(seen[idx]) fail('ambiguous_independent_mapping'); seen[idx]=1;
-      result[idx]=row.undefined ? NaN : row.hz;
-    }
+    previous = row.time;
+  }
+  const seen = new Set();
+  let collision = false;
+  const legacy = track.map((row) => {
+    const index = tieEven(row.time / STEP);
+    if (index < 0 || index >= frames || Math.abs(row.time - index * STEP) > .0025) return null;
+    if (seen.has(index)) collision = true;
+    seen.add(index);
+    return index;
+  });
+  const halfGridStart = collision ? regularHalfGrid(track) : null;
+  if (collision && halfGridStart === null) fail('ambiguous_independent_mapping');
+  const result = new Float64Array(frames).fill(NaN);
+  for (const [offset, row] of track.entries()) {
+    const index = halfGridStart === null ? legacy[offset] : halfGridStart + offset;
+    if (index !== null && index < frames && !row.undefined) result[index] = row.hz;
   }
   return result;
 }
@@ -64,7 +88,7 @@ export function selectSharedCalibration(best, shared) {
 }
 
 /** Native scoring and gates, plus an authenticated frozen-input exact-tie anchor. */
-export function sourcePlan(f0, independent, samples, sharedStart=null) {
+export function sourcePlan(f0, independent, samples, sharedStart=null, accept=null) {
   if(!(f0 instanceof Float64Array) || !(independent instanceof Float64Array) || f0.length!==independent.length ||
       !Number.isSafeInteger(samples) || samples<=0 || f0.length!==Math.floor(1000*samples/FS/5)+1) fail('invalid_source_tracks');
   if(sharedStart!==null&&(!Number.isSafeInteger(sharedStart)||sharedStart<0))fail('invalid_shared_calibration');
@@ -83,7 +107,7 @@ export function sourcePlan(f0, independent, samples, sharedStart=null) {
       let sum=0;for(let j=-50;j<=50;j++){let x=i+j;if(x<0)x=-x;if(x>=len)x=2*len-2-x;sum+=(p[x]-p[i])*kernel[j+50];} band[first+i]=sum;
     }
   }
-  let best=null, score=null, candidates=0; const low=1200*Math.log2(71), high=1200*Math.log2(800);
+  let best=null, score=null, candidates=0, overLimit=0; const low=1200*Math.log2(71), high=1200*Math.log2(800);
   for(const start of legalStarts(samples)) {
     const end=start+WINDOW, mask=new Uint8Array(n);
     for(let i=0;i<n;i++) if(eligible[i] && 441*i>=2*(start+4410) && 441*i<2*(end-4410))mask[i]=1;
@@ -106,30 +130,71 @@ export function sourcePlan(f0, independent, samples, sharedStart=null) {
     const rmsSupport=supportN?Math.sqrt(supportSq/supportN):0,bias=errors.length?median(errors):null,noise=errors.length?1.4826*median(errors.map(x=>Math.abs(x-bias))):null;
     const computed={start_sample:start,end_sample:end,longest_support_frames:b-a,calibration_a_seconds:a*STEP,calibration_b_seconds:(b-1)*STEP,calibration_eligible:true,
       component_rms_whole_cents:rms,component_rms_support_cents:rmsSupport,component_nonzero_frames:supportN,source_bias_cents:bias,source_noise_proxy_cents:noise,
-      native_source_estimable:rmsSupport>0&&bias!==null&&Math.abs(bias)<rmsSupport&&noise!==null&&noise<rmsSupport,segments,component_cents:component,weight:weights,rawband_cents:band,eligible};if(start===sharedStart)shared=computed;if(wins){best=computed;score=candidate;}
+      native_source_estimable:rmsSupport>0&&bias!==null&&Math.abs(bias)<rmsSupport&&noise!==null&&noise<rmsSupport,segments,component_cents:component,weight:weights,rawband_cents:band,eligible};
+    if (accept && computed.component_cents.some((x) => Math.abs(x) > 50)) {
+      overLimit++;
+      continue;
+    }
+    if (accept && !accept(computed)) continue;
+    if(start===sharedStart)shared=computed;if(wins){best=computed;score=candidate;}
   }
-  if(!best)fail('condition_insufficient_no_calibration_window');
+  if(!best)fail(accept && candidates ? 'condition_insufficient_no_fully_qualified_window' : 'condition_insufficient_no_calibration_window');
   if(sharedStart!==null)best=selectSharedCalibration(best,shared);
   if(best.component_cents.some(x=>Math.abs(x)>50))fail('condition_insufficient_postcenter_over50');
-  best.legal_calibration_candidates=candidates;best.postcenter_over50_rejected_windows=0;
+  best.legal_calibration_candidates=candidates;best.postcenter_over50_rejected_windows=overLimit;
   best.independent_missing_frames=independent.reduce((n,x)=>n+(!finite(x)?1:0),0);best.source_voiced_frames=voiced.reduce((n,x)=>n+x,0);
   return best;
 }
 
 /** Producer-derived intervals for the original frame and immutable AP parent. */
-export function qualifySource({f0,time,ap,frames,samples,track,inputSha256,methodVersion}) {
+export function qualifySource({f0,time,ap,frames,samples,track,inputSha256,methodVersion}, verifyFallback=null, historicalDefault=false) {
   if(!Number.isSafeInteger(frames)||frames!==f0?.length || !(time instanceof Float64Array)||time.length!==frames ||
       !(ap instanceof Float64Array)||ap.length!==frames*1025 || !/^[0-9a-f]{64}$/.test(inputSha256) || typeof methodVersion!=='string'||!methodVersion) fail('invalid_input');
   for(let i=0;i<frames;i++){if(!finite(time[i])||Math.abs(time[i]-i*STEP)>1e-12)fail('invalid_time');}
   for(const x of ap)if(!finite(x)||x<0||x>1)fail('invalid_ap');
-  const independent=alignPraat(frames,track), plan=sourcePlan(f0,independent,samples,frozenCalibrationStart(inputSha256));
-  if(plan.native_source_estimable!==true)fail('condition_insufficient_independent_track');
-  const outer=new Uint8Array(frames), m=new Uint8Array(frames), q=new Uint8Array(frames), t=new Uint8Array(frames);
-  for(let i=0;i<frames;i++){outer[i]=441*i>=2*plan.start_sample&&441*i<2*plan.end_sample?1:0;
-    m[i]=outer[i]&&plan.weight[i]>0?1:0;t[i]=outer[i]&&f0[i]>=FS/2048+1?1:0;q[i]=t[i]&&ap[i*1025]**2<=.999?1:0;}
-  const motion=intervals(m).filter(([a,b])=>(b-a-1)*STEP>=.75);if(!motion.length||!plan.segments.length)fail('condition_insufficient_motion');
-  const tIntervals=intervals(t),qIntervals=intervals(q), region=motion.reduce((best,x)=>!best || x[1]-x[0]>best[1]-best[0]?x:best,null), win=intervals(outer);
-  if(win.length!==1)fail('invalid_window');
-  return {schema:'issue41-qualification-candidate-v1',input_sha256:inputSha256,method_version:methodVersion,sample_rate:FS,input_frames:samples,
-    window_samples:[plan.start_sample,plan.end_sample],window_frames:win[0],eligible_intervals:{M:motion,Q:qIntervals,T:tIntervals},default_region:region,plan,independent};
+  const independent = alignPraat(frames, track);
+  const sharedStart = frozenCalibrationStart(inputSha256);
+  function qualify(plan) {
+    if(plan.native_source_estimable!==true)fail('condition_insufficient_independent_track');
+    const outer=new Uint8Array(frames), m=new Uint8Array(frames), q=new Uint8Array(frames), t=new Uint8Array(frames);
+    for(let i=0;i<frames;i++){outer[i]=441*i>=2*plan.start_sample&&441*i<2*plan.end_sample?1:0;
+      m[i]=outer[i]&&plan.weight[i]>0?1:0;t[i]=outer[i]&&f0[i]>=FS/2048+1?1:0;q[i]=t[i]&&ap[i*1025]**2<=.999?1:0;}
+    const motion=intervals(m).filter(([a,b])=>(b-a-1)*STEP>=.75);if(!motion.length||!plan.segments.length)fail('condition_insufficient_motion');
+    const tIntervals=intervals(t),qIntervals=intervals(q), region=motion.reduce((best,x)=>!best || x[1]-x[0]>best[1]-best[0]?x:best,null), win=intervals(outer);
+    if(win.length!==1)fail('invalid_window');
+    return {schema:'issue41-qualification-candidate-v1',input_sha256:inputSha256,method_version:methodVersion,sample_rate:FS,input_frames:samples,
+      window_samples:[plan.start_sample,plan.end_sample],window_frames:win[0],eligible_intervals:{M:motion,Q:qIntervals,T:tIntervals},default_region:region,plan,independent};
+  }
+  try {
+    const source = qualify(sourcePlan(f0, independent, samples, sharedStart));
+    const [first, last] = source.default_region;
+    if (!historicalDefault && !source.eligible_intervals.T.some(([a, b]) => a <= first && last <= b)) {
+      fail('condition_insufficient_T_region');
+    }
+    return source;
+  } catch (error) {
+    if (sharedStart !== null || !verifyFallback || ![
+      'condition_insufficient_postcenter_over50', 'condition_insufficient_independent_track',
+      'condition_insufficient_motion', 'condition_insufficient_T_region',
+    ].includes(error.message)) throw error;
+  }
+  let selected;
+  sourcePlan(f0, independent, samples, null, (plan) => {
+    let candidate;
+    try {
+      candidate = qualify(plan);
+    } catch (error) {
+      if (['condition_insufficient_independent_track', 'condition_insufficient_motion'].includes(error.message)) {
+        return false;
+      }
+      throw error;
+    }
+    const [first, last] = candidate.default_region;
+    if (!candidate.eligible_intervals.T.some(([a, b]) => a <= first && last <= b) || !verifyFallback(candidate)) {
+      return false;
+    }
+    selected = candidate;
+    return true;
+  });
+  return selected;
 }

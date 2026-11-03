@@ -12,7 +12,7 @@ const PINS = {
   world_module: '8b27b73fefe8be20b36cf5288d06d1cd938813b7d9c1a179227fe1cac3d5cdcb',
   world_wasm: 'fabb1b8f6225f23221bb75f0b69fcbe6f6e033ef0c1aedf0d124393001715a46',
 };
-let engine, busy = false, manifest, verification = false;
+let engine, busy = false, manifest, verification = false, verificationSdkCap = 48;
 const timings = [];
 const read = async (path) => {
   const response = await fetch(new URL(path, import.meta.url), { credentials: 'omit' });
@@ -45,7 +45,7 @@ async function auditReserve(event) {
       request.onsuccess = () => {
         const rows = request.result, sdk = rows.filter((row) => row.kind !== 'audio_read').length;
         const samples = rows.reduce((sum, row) => sum + (row.samples || 0), 0);
-        if ((event.kind !== 'audio_read' && sdk >= 48) || samples + event.samples > 4000 * 44100) { tx.abort(); return; }
+        if ((event.kind !== 'audio_read' && sdk >= verificationSdkCap) || samples + event.samples > 4000 * 44100) { tx.abort(); return; }
         store.add(event);
       };
     });
@@ -67,6 +67,10 @@ async function verificationEvents() {
 
 async function initialize(options) {
   verification = options.verification === true;
+  verificationSdkCap = options.verificationSdkCap ?? 48;
+  if (!Number.isSafeInteger(verificationSdkCap) || verificationSdkCap < 1 || verificationSdkCap > 48) {
+    throw new Error('invalid_verification_budget');
+  }
   const response = await fetch(new URL('./release.json', import.meta.url), { credentials: 'omit' });
   if (!response.ok) throw new Error('asset_load_failed');
   manifest = await response.json();

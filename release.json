@@ -59,22 +59,22 @@
   },
   "license": "GPL-3.0-or-later",
   "notices": "licenses/notices.txt",
-  "release": "f4cd8082af496d6b08ca94af587537f2400c2d7bbbb037ee6ba96cf1c62d2aab",
+  "release": "e337dbda05b2178b5c4eb8f394b5d459c61fcd00f00154177c594818a72f557e",
   "schema": "voice-static-release-v1",
   "source": {
-    "bytes": 29872251,
+    "bytes": 29874639,
     "chunks": [
       {
         "bytes": 20971520,
         "path": "assets/source-000.bin",
-        "sha256": "02266461b325994bb6a724436cb05b44a65b2653a14b384152f121e12e160967"
+        "sha256": "d9aa48e5178eeab79b135a2f7e5fd83b73629060d127b5ed6dd898f8726dcad8"
       },
       {
-        "bytes": 8900731,
+        "bytes": 8903119,
         "path": "assets/source-001.bin",
-        "sha256": "eb3338d1953dbcb427defa8ffc3c1a32d0e9169da0d33090a37e64a611333317"
+        "sha256": "b9f53440454e7f679e527778c2211de54dbadb70f346663cccd25f0b24296042"
       }
     ],
-    "sha256": "791effef10251b2dab9369d4362e5371b18a3b4db0677e87a60b3ee5146c272a"
+    "sha256": "a04d9b591acf623208735d3247dbafd53e1818bb7a0e66be1740a622befe1543"
   }
 }

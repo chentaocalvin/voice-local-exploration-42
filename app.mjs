@@ -324,7 +324,8 @@ button('evidence').onclick = async () => {
   try { const api = await connect(), slot = select('evidence-slot').value, result = await api.rpc('evidence', { slot });
     const name = 'evidence-' + result.header.input_sha256.slice(0, 12) + '-' + slot;
     download(new Blob([JSON.stringify(result.header, null, 2)], { type: 'application/json' }), name + '.json');
-    download(result.blob, name + '.bin'); element('verification-status').textContent = '已导出 ' + slot;
+    const extension = result.header.schema === 'voice-waveform-evidence-v2' ? '.wav' : '.bin';
+    download(result.blob, name + extension); element('verification-status').textContent = '已导出 ' + slot;
   } catch (error) { message(friendly(error), true); }
 };
 button('audit').onclick = async () => {
