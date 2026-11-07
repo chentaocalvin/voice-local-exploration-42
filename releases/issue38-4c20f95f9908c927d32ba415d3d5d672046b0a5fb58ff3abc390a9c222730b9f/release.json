@@ -1,0 +1,128 @@
+{
+  "assets": {
+    "praat_module": {
+      "bytes": 305939,
+      "chunks": [
+        {
+          "bytes": 305939,
+          "path": "assets/praat_module-000.mjs",
+          "sha256": "c4f896e909f4ad1733ed2dcc6320096e19ccc5647e951a70a54f19db0313d1a2"
+        }
+      ],
+      "sha256": "c4f896e909f4ad1733ed2dcc6320096e19ccc5647e951a70a54f19db0313d1a2"
+    },
+    "praat_quality_module": {
+      "bytes": 305947,
+      "chunks": [
+        {
+          "bytes": 305947,
+          "path": "assets/praat_quality_module-000.mjs",
+          "sha256": "3a0fa4a532145b29a071c350218e2de0851b4f173781b59b7e1f7477cdddb85e"
+        }
+      ],
+      "sha256": "3a0fa4a532145b29a071c350218e2de0851b4f173781b59b7e1f7477cdddb85e"
+    },
+    "praat_quality_wasm": {
+      "bytes": 40745976,
+      "chunks": [
+        {
+          "bytes": 20971520,
+          "path": "assets/praat_quality_wasm-000.bin",
+          "sha256": "2aabcf4586cb6b7fae7fd1ac402a9a9f6302d76b522d1eaafd127ab1541bf8eb"
+        },
+        {
+          "bytes": 19774456,
+          "path": "assets/praat_quality_wasm-001.bin",
+          "sha256": "c12cb249d43c1c10b62d0e619239bde0223c491d471ae0a9cd56e91e509ad5c4"
+        }
+      ],
+      "sha256": "d3f29721d5ab79fa90d7373a0241972074a59467925cc58c0837559f5be10f9a"
+    },
+    "praat_wasm": {
+      "bytes": 40743390,
+      "chunks": [
+        {
+          "bytes": 20971520,
+          "path": "assets/praat_wasm-000.bin",
+          "sha256": "9ddeca012c519ba0b041dac6a882a344d0d6a0a5686d19dccc9acc005ff54945"
+        },
+        {
+          "bytes": 19771870,
+          "path": "assets/praat_wasm-001.bin",
+          "sha256": "4b630a3c4ee08c846dcd557ed747c689ccfde4aa3e5103c7954fef7193914efc"
+        }
+      ],
+      "sha256": "4fad3e73c2cb8daecaddc72920b5c29fa9a62c6d8ac367d0be19794dccc7eb9d"
+    },
+    "world_module": {
+      "bytes": 14869,
+      "chunks": [
+        {
+          "bytes": 14869,
+          "path": "assets/world_module-000.mjs",
+          "sha256": "8b27b73fefe8be20b36cf5288d06d1cd938813b7d9c1a179227fe1cac3d5cdcb"
+        }
+      ],
+      "sha256": "8b27b73fefe8be20b36cf5288d06d1cd938813b7d9c1a179227fe1cac3d5cdcb"
+    },
+    "world_wasm": {
+      "bytes": 108983,
+      "chunks": [
+        {
+          "bytes": 108983,
+          "path": "assets/world_wasm-000.bin",
+          "sha256": "fabb1b8f6225f23221bb75f0b69fcbe6f6e033ef0c1aedf0d124393001715a46"
+        }
+      ],
+      "sha256": "fabb1b8f6225f23221bb75f0b69fcbe6f6e033ef0c1aedf0d124393001715a46"
+    }
+  },
+  "example": {
+    "bytes": 2927806,
+    "license": "CC-BY-4.0",
+    "path": "../../example.wav",
+    "samples": 1463881,
+    "sha256": "97504361908ce2f8b27a65ce408f13757b6ac6ba07ae53f527b5d91a9eee3ae4",
+    "source": "https://doi.org/10.5281/zenodo.1203819"
+  },
+  "joint": {
+    "enabled": true,
+    "private_run": true,
+    "private_setup": true,
+    "source_proof_key": {
+      "crv": "P-256",
+      "kty": "EC",
+      "x": "kVO0Cqa9yqQWFs7zm_9IlU7j8I1yEKO7ivZ4GSsPHec",
+      "y": "oVXu4Z34KpRzve_J0LWMuf2uDMnbEf9PnIJF_ZCbykk"
+    }
+  },
+  "license": "GPL-3.0-or-later",
+  "notices": "licenses/notices.txt",
+  "schema": "voice-static-release-v1",
+  "source": {
+    "bytes": 29937038,
+    "chunks": [
+      {
+        "bytes": 20971520,
+        "path": "assets/source-000.bin",
+        "sha256": "2cfa4cadf3bc26c00aaad3af5469ef3e71dbe6fbe16c68f2da58919ce83c1156"
+      },
+      {
+        "bytes": 8965518,
+        "path": "assets/source-001.bin",
+        "sha256": "5fb2ae5202847f5f613d815f278954b5ea6b916cfc5fd8b865500686da6bbba6"
+      }
+    ],
+    "sha256": "5fbcaab06e721a9825c5bb6a55f3f365fa5244ff0a1f0a6146b55e368d094dff"
+  },
+  "public_probe": "issue38-anonymous-example-v1",
+  "private_profile": "issue38-joint-spectral-headroom-v1",
+  "source_overlay": {
+    "path": "source-overlay/README.md",
+    "bytes": 2668,
+    "sha256": "1400092a3307191210e63f3e0c846c30073d011110b9e4f71321a08fc4a78e55",
+    "inventory": "source-overlay/manifest.json",
+    "inventory_sha256": "7d71930a5a0d8cca9e6491e9b7a05ae1cb502b5ec031b4eda1ce48dcc9a77cf7"
+  },
+  "release": "4c20f95f9908c927d32ba415d3d5d672046b0a5fb58ff3abc390a9c222730b9f"
+}
