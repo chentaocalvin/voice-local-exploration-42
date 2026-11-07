@@ -1,0 +1,42 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>恢复本次用量回执</title>
+<style>body{font:18px/1.6 system-ui;max-width:48rem;margin:3rem auto;padding:0 1rem;color:#213b32}input{display:block;width:100%;box-sizing:border-box;padding:.6rem;font:inherit}button{font:inherit;margin:.8rem .6rem .8rem 0;padding:.5rem 1rem}pre{white-space:pre-wrap;overflow-wrap:anywhere}label{display:block}</style>
+<h1>恢复本次用量回执</h1>
+<p>只核对当前浏览器已有的用量账本。不会打开录音或恢复试听。请填写本次登记回执中的浏览器编号。</p>
+<label for="recipient">预期浏览器编号（64位小写十六进制）</label><input id="recipient" autocomplete="off" spellcheck="false" maxlength="64">
+<button id="report">查看已有账本</button><button id="end">结束账本并导出回执</button>
+<p id="status" role="status">尚未读取。声音副本的清理状态未核实。</p><pre id="result"></pre>
+<p><a href="./GPL-3.0.txt">GNU GPL 3.0 许可原文</a></p>
+<script type="module">
+import {privateRunReceipt} from './private_run_receipt.mjs';
+const release = 'ef5ed97d61c5a3a994e6fb3fc35bd4e3b760a1b8cbe1465a9cd757ea7d79c2e1';
+const recipient = document.getElementById('recipient');
+const status = document.getElementById('status');
+const result = document.getElementById('result');
+const report = document.getElementById('report'), end = document.getElementById('end');
+async function inspect(operation) {
+  const expected = recipient.value.trim();
+  if (!/^[a-f0-9]{64}$/.test(expected)) { status.textContent = '请填写本次登记回执中的完整浏览器编号。';return; }
+  report.disabled = end.disabled = true;
+  result.textContent = '';
+  try {
+    const ledger = await privateRunReceipt(indexedDB, release, operation, expected);
+    const receipt = {...ledger, release, recipient:expected, archive_cleanup:'unverified'};
+    const text = JSON.stringify(receipt,null,2);
+    result.textContent = text;
+    if (operation === 'end') {
+      const url = URL.createObjectURL(new Blob([text],{type:'application/json'}));
+      const anchor = document.createElement('a');
+      anchor.href=url;anchor.download='private-run-receipt.json';document.body.append(anchor);anchor.click();anchor.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }
+    status.textContent = ledger.ended ? '账本已结束，回执可用。声音副本的清理状态未核实。' : '已读取既有用量。账本尚未结束；声音副本的清理状态未核实。';
+  } catch {
+    status.textContent = '无法核验本次已有账本。请核对浏览器配置、登记编号及原发布版本；未创建或恢复试听。';
+  } finally { report.disabled = end.disabled = false; }
+}
+report.onclick = () => inspect('report');
+end.onclick = () => inspect('end');
+</script></html>
