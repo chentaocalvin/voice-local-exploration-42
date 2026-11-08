@@ -1,0 +1,37 @@
+听见变化 — program and source notices
+
+The original website and browser bridges are licensed under GNU GPL version 3
+or, at your option, any later version. There is NO WARRANTY, to the extent
+permitted by law. The full GPL v3 text is provided as GPL-3.0.txt. Complete
+corresponding source, all modifications, build instructions and dependency
+notices are downloadable without an account from the program's license dialog.
+The source download is an ordered, SHA-256 checked concatenation of public
+assets. Its source-index.json identifies every archive member.
+
+Praat 6.4.06 (commit 7e177f5705958fd8f1e71e1e50efb24b1306cda0)
+is distributed as a whole under GPL v3 or later. Most original source files
+also permit GPL v2 or later. Copyright and component terms are preserved in
+the corresponding source, particularly vendor/praat/fon/manual_licenses.cpp.
+Included components include GSL, GLPK and eSpeak (GPL3+), MAD (GPL2+), LAME
+(GNU Library GPL2+), AMD/COLAMD (LGPL2.1+), FLAC, Ogg/Vorbis, Opus/SILK,
+PortAudio, Unicode and the other source notices. Patent notices remain intact.
+WORLD (commit 8d79b88b7dd92e8a132996cf74080b2d6f881b98) retains its original
+permissive license, provided as WORLD-LICENSE.txt and in corresponding source.
+The linked Emscripten 3.1.64 runtime retains its MIT/University of Illinois
+terms, musl terms, and Apache-2.0 WITH LLVM-exception runtime terms. See the
+original runtime notices in this directory and vendor/emscripten-runtime.
+General unmodified compiler tools are build prerequisites, not bundled assets.
+
+The separately licensed example recording is VocalSet 1.1,
+FULL/male2/excerpts/vibrato/m2_caro_vibrato.wav by Julia Wilkins,
+Prem Seetharaman, Alison Wahl and Bryan Pardo.
+Source: https://doi.org/10.5281/zenodo.1203819
+License: Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+The supplied WAV is byte-identical to the published dataset member. Audio
+processing performed by a visitor creates a changed version; the original is
+retained separately. No author endorsement is implied. The program's GPL does
+not replace the recording's CC BY 4.0 terms. No other recording is distributed.
+
+The additional Praat voice-quality browser bridge and joint browser application
+carry the same GPL version 3 or later terms as the original website.
