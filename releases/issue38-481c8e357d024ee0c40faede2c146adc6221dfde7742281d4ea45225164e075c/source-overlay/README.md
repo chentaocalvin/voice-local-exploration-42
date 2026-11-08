@@ -1,0 +1,14 @@
+# Complete corresponding source
+
+This release is GPL-3.0-or-later. Its complete source consists of the unchanged base source archive linked by ../release.json plus every file in this source-overlay directory. The base includes the native SDK sources, existing build instructions and notices; the overlay supplies all browser application modules, the PAGE source and the new SDK0 tests. No native SDK binary was changed for this release.
+
+1. Download the base archive using the page's base-source button or the source chunks listed in ../release.json. Verify its published SHA-256 and unpack it.
+2. Download this directory (or the complete repository at this release's public commit). manifest.json lists every overlay file with its byte count and SHA-256. Keep its relative directory structure.
+3. Run `python3 -B apply_overlay.py /path/to/unpacked/source` with the directory containing issue42 and tests. It verifies the overlay and copies those source directories plus the explicit metadata preparation/validation/collection entry points prepare-continuation.mjs, check-continuation.mjs and collect-continuation.py to the source root. Existing files are intentionally replaced by this release's source.
+4. Follow the base source's native SDK/build instructions. The web layer uses the supplied issue42/**/*.mjs files unchanged and renders the literal HTML string in issue42/page.py as index.html. Deploy them alongside the unchanged assets and licenses, and use this release's ../release.json. The public example retains its separate CC-BY-4.0 attribution there.
+
+The base source archive alone represents the earlier base. Apply the overlay to obtain this release. The parent source archive SHA-256 is 5fbcaab06e721a9825c5bb6a55f3f365fa5244ff0a1f0a6146b55e368d094dff. Full GPL text and third-party notices are available in ../licenses/.
+
+The exact text/Git-object build helper is included as build_release.py, with its public base inputs base-release.json and public-basis.json. After applying the overlay, run `python3 -B source-overlay/build_release.py /path/to/source source-overlay/base-release.json source-overlay/public-basis.json /path/to/output`. It emits the text files and Git tree entries; unchanged assets/licenses are reused by their object identities. Export those assets/licenses from the public base release into the output before serving. The --text-only option writes index.html.txt for environments restricted to source text; the Git payload still names index.html.
+
+The new tests use synthetic inputs and external SDK/storage boundary substitutes. Passing them does not establish sound quality on arbitrary recordings. Node with node:module registerHooks support was used for the SDK0 Worker cases. Private recordings, operational credentials and internal work records are not part of this public distribution.
